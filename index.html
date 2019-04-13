@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang = 'en'>
+    <head>
+        <meta charset="utf-8" lang="en"/>
+
+        <!-- CSS -->
+        <link rel="stylesheet" href="./css/bootstrap.min.css"/>
+        <link rel="stylesheet" href="./css/custom.css"/>
+        <link href = "https://code.jquery.com/ui/1.10.4/themes/ui-lightness/jquery-ui.css"
+         rel = "stylesheet">
+
+        <!-- Javascript -->
+        <script src = "https://code.jquery.com/jquery-1.10.2.js"></script>
+        <script src = "https://code.jquery.com/ui/1.10.4/jquery-ui.js"></script>
+        <script src="./js/bootstrap.min.js"></script>
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <title>CS 3300: Project 2</title>
+    </head>
+
+    <body>
+
+        <div class="p-5 pt-4 bg-light">
+            <h1 class="test-grey text-weight-light">Album Ratings vs. Album Sales</h1>
+            <p class="text-muted font-weight-light">Joshua Hong (jh976), Kaushik Ravikumar (kr437)</p>
+
+			<div id="vis1" class="p-4 mt-5">
+				<h4 class="text-secondary"></h4>
+				<p class="font-weight-light"> This visualization depicts the relationship between an album's ratings and how popular it is on Spotify's streaming platform.
+                    The album ratings were performed by Pitchfork and are on a scale from 0 to 10. The popularity score is an integer between 0 to 100 calculated by Spotify
+                    based on the number of streams and the current popularity. The albums included in this visualization were randomly selected ones released between 2016-2017
+                    that were rated by Pitchfork.
+				</p>
+                <!-- Visualization 1-->
+                <div class="search-div">
+                    <form id="searchForm">
+                        <input type="text" placeholder="Album..." name="albums" id="albums" autocomplete="off">
+                        <input id="submit" type="submit" value="Search">
+                    </form>
+                </div>
+                <br/>
+                <div class="genrelegend" style="width:650px;height:25px;background-color: gray" id="genreLegend" ></div>
+				<div class="flex row p-3 rounded bg-white justify-content-around align-items-center">
+                    <svg id="albumChart" width="700" height="500"></svg>
+                    <svg id="albumInfo" width="550" height="500">
+                        <!-- <rect width="400" height="500" style="fill:none;stroke-width:2;stroke:rgb(0,0,0)" /> -->
+                    </svg>
+                </div>
+            </div>
+          </div>
+
+        <script id="albumsScript">
+
+        const svg = d3.select("svg#albumChart");
+        const genreLegend = d3.select("#genreLegend");
+        const albumInfoSvg = d3.select("svg#albumInfo");
+
+        const width = 650;
+        const height = 500;
+
+        const margin = {
+            top: 40,
+            right: 70,
+            bottom: 40,
+            left: 80
+        };
+
+        const chartWidth = width - margin.left - margin.right;
+        const chartHeight = height - margin.top - margin.bottom;
+
+        const requestAlbumData = async() => {
+
+            const pitchforkData = await d3.csv("./data/more_filtered_pitchfork_data.csv");
+            const popularityData = await d3.json("./data/popularity_data.json");
+
+            var pitchforkRatingMax = d3.max(pitchforkData, d => parseFloat(d['score']));
+            var pitchforkRatingMin = d3.min(pitchforkData, d => parseFloat(d['score']));
+            var popularityDataMin = d3.min(popularityData, d => d['pop']);
+            var popularityDataMax = d3.max(popularityData, d => d['pop']);
+
+            var clickList = [];
+            var clicked = [];
+            var currAlbumCircle, currAlbumId, albumTitleText, albumArtistText, pitchforkText, pitchforkRatingArc,
+                background1, foreground1, pitchforkScoreText, spotifyText, spotifyPopularityText, spotifyRatingArc,
+                foreground2, background2, genresText, numTracksText, releaseDateText, labelText;
+
+            let pitchforkRatingScale = d3.scaleLinear()
+                .domain([Math.floor(pitchforkRatingMin), Math.ceil(pitchforkRatingMax)])
+                .range([margin.left, chartWidth + margin.left]);
+            let popularityScale = d3.scaleLinear()
+                .domain([popularityDataMin, popularityDataMax])
+                .range([margin.top + chartHeight, margin.top]);
+
+            let popularityAxis = d3.axisLeft(popularityScale);
+            let pitchforkRatingAxis = d3.axisBottom(pitchforkRatingScale);
+
+            let xGridlines = d3.axisBottom(pitchforkRatingScale).tickSize(-chartHeight - 10).tickFormat("");
+            svg.append("g").attr("class", "x gridlines")
+                .attr("transform", "translate(" + 0 + "," + (margin.top + chartHeight) + ")")
+                .call(xGridlines);
+
+            let yGridlines = d3.axisLeft(popularityScale).tickSize(-chartWidth - 10).tickFormat("");
+            svg.append("g").attr("class", "y gridlines")
+                .attr("transform", "translate(" + (margin.left) + "," + (0) + ")")
+                .call(yGridlines);
+
+            svg.append("g")
+                .attr("class", "y axis")
+                .attr("transform", "translate(" + (margin.left) + "," + (0) + ")")
+                .call(popularityAxis);
+
+            svg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(" + (0) + "," + (chartHeight + margin.top) + ")")
+                .call(pitchforkRatingAxis);
+
+            svg.append("text")
+                .text("Spotify Popularity")
+                .attr("x", -1 * (chartHeight / 2 + margin.top))
+                .attr("y", 20)
+                .attr("transform", "rotate(-90)")
+                .attr("font-weight", "bold")
+                .attr("text-anchor", "middle")
+                .attr("fill", "black")
+                .attr("font-size", "12px");
+
+            svg.append("text")
+                .text("Pitchfork Rating")
+                .attr("x", (chartWidth / 2 + margin.left))
+                .attr("y", (chartHeight + margin.top) + 35)
+                .attr("text-anchor", "middle")
+                .attr("font-weight", "bold")
+                .attr("fill", "black")
+                .attr("font-size", "12px");
+
+            function is_genre(fst, genre) {
+                return fst.toLowerCase().includes(genre.toLowerCase());
+            }
+
+            function isEdm(fst) {
+                return fst.toLowerCase().includes("edm") || fst.toLowerCase().includes("elec");
+            }
+
+            function isAltIndie(fst) {
+                return fst.toLowerCase().includes("alt") || fst.toLowerCase().includes("indie");
+            }
+
+            function getMainGenre(lst) {
+                if (lst.length == 0) {
+                    return "other";
+                }
+                var fst = lst[0];
+                if (isEdm(fst)) {
+                    return "edm";
+                } else if (is_genre(fst, "pop")) {
+                    return "pop";
+                } else if (is_genre(fst, "hip hop")) {
+                    return "hiphop";
+                } else if (is_genre(fst, "rap")) {
+                    return "rap";
+                } else if (is_genre(fst, "r&b")) {
+                    return "rnb";
+                } else if (is_genre(fst, "country")) {
+                    return "country";
+                } else if (isAltIndie(fst)) {
+                    return "alt/indie"
+                } else if (is_genre(fst, "rock")) {
+                    return "rock";
+                } else if (is_genre(fst, "ambient")) {
+                    return "ambient";
+                } else if (is_genre(fst, "metal")) {
+                    return "metal";
+                } else if (is_genre(fst, "jazz")) {
+                    return "jazz";
+                } else {
+                    return "other";
+                }
+            }
+
+            const genreScale = d3.scaleOrdinal(d3.schemeSet3);
+
+            console.log(pitchforkData.length);
+
+            for (let x = 0; x < pitchforkData.length; x++) {
+                let genre = getMainGenre(popularityData[x]['genres']);
+                let albumName = popularityData[x]['title'];
+                let pitchforkRating = pitchforkRatingScale(pitchforkData[x]['score']);
+                let popularityScore = popularityScale(popularityData[x]['pop']);
+                let circle =
+                    svg.append("circle")
+                    .attr("cx", pitchforkRating)
+                    .attr("cy", popularityScore)
+                    .attr("fill", genreScale(genre))
+                    .attr("r", 10)
+                    .attr("genre", genre)
+                    .attr("title", albumName)
+                    .attr("clickable", true)
+                    .attr("artist", popularityData[x]['artist'])
+                    .style("opacity", 0.3);
+
+                circle.on("mouseover", function () {
+                        console.log("mouseover");
+                        d3.select(this).attr("r", 20);
+                        d3.select("#" + "num" + x).remove();
+
+                        svg.append("text")
+                            .attr("id", "num" + x)
+                            .attr("x", pitchforkRating)
+                            .attr("y", popularityScore - 20)
+                            .style("text-anchor", "middle")
+                            .style("pointer-events", "none")
+                            .attr("fill", "black")
+                            .text(albumName)
+                            .attr("font-weight", "bold");
+                });
+
+                circle.on("mouseout", function () {
+                    if (clickList.includes(genre))
+                      {
+                        circle.attr("r", 10)
+                        .style("opacity",1)
+                        .style("stroke","black")
+                        .attr("stroke-width", 1);
+                        d3.select("#" + "num" + x).remove();
+                      } else if (currAlbumCircle == null ||
+                                ((circle.attr("title") != currAlbumCircle.attr("title")) &&
+                            (circle.attr("artist") != currAlbumCircle.attr("artist"))
+                            ))
+                      {
+                              console.log("mouseout");
+                              let circle = d3.select(this);
+                              circle.transition().duration(100)
+                              .attr("r",10)
+                              .style("opacity", 0.3)
+                              .style("stroke","none")
+                              d3.select("#" + "num" + x).remove();
+                      }
+                      else if ((clicked > 0) && (circle.attr("r",10))){
+                        circle.style("stroke",'none')
+                        .style("opacity", 0.3)
+                        d3.select("#" + "num" + x).remove();
+                      }
+                      else if ((clicked > 0) && (circle.attr("r",20))){
+                        circle
+                        .attr("r", 20)
+                        .style("opacity",1)
+                        .style("stroke","black")
+                        .attr("stroke-width", 1);
+                      }
+                });
+                circle.on("click", function () {
+                  loadAlbumInfo(x);
+                  if(clicked > 0){
+                    if(circle.attr("r",20)){
+                      circle.style("stroke","black")
+                      console.log("here")
+                  }
+                  }
+                });
+            }
+
+
+            genreScale.domain().forEach(function (d, i) {
+                genreLegend.append("span")
+                    .text(d)
+                    .attr("class", "mouse")
+                    .style("font-size", "14px")
+                    .style("color", genreScale(d))
+                    .on("click", function () {
+                        console.log(clicked);
+                        clicked++
+                        if (!clickList.includes(d)) {
+                            clickList.push(d);
+                            this.style.fontWeight = "bold";
+                            this.style.fontSize = "15px";
+                            svg.selectAll("circle").each(function () {
+                                let circle = d3.select(this);
+                                if (clickList.includes(circle.attr("genre"))) {
+                                    circle.style("opacity", 1);
+                                    circle.style("stroke", "black");
+                                    circle.attr("stroke-width", 1);
+                                    circle.style("visibility", "visible");
+
+                                } else {
+                                    circle.style("opacity", 0);
+                                    circle.style("visibility", "hidden");
+                                }
+                            });
+                        } else {
+                            var index = clickList.indexOf(d);
+                            clickList.splice(index, 1);
+                            this.style.fontWeight = "normal";
+                            this.style.fontSize = "15px";
+
+                            if (clickList.length == 0) {
+                                svg.selectAll("circle").each(function () {
+                                    let circle = d3.select(this);
+                                    circle.style("opacity", 0.3);
+                                    circle.style("stroke", "none");
+                                    circle.style("visibility", "visible");
+                                });
+                                return;
+                            }
+
+                            svg.selectAll("circle").each(function () {
+                                let circle = d3.select(this);
+                                if (clickList.includes(circle.attr("genre"))) {
+                                    circle.style("opacity", 1);
+                                    circle.style("stroke", "black");
+                                    circle.attr("stroke-width", 1);
+                                    circle.style("visibility", "visible");
+                                } else {
+                                    circle.style("opacity", 0);
+                                    circle.style("visibility", "hidden");
+                                }
+                            })
+                            console.log(clickList)
+                        }
+                    })
+            });
+
+            function generateAlbumList(data) {
+                var lst = [];
+                data.forEach(function (d, i) {
+                    lst.push(d['title'] + ", " + d['artist']);
+                });
+                return lst;
+            }
+
+            var albumLst = generateAlbumList(popularityData);
+
+            $(document).ready(function () {
+                $('#albums').autocomplete({
+                    source: albumLst,
+                    minLength: 2
+                });
+            });
+
+            function concatenateStringArr(arr) {
+                var str = "";
+                arr.forEach(function (d, i) {
+                    str += d;
+                    if (i != arr.length - 1) {
+                        str += ", ";
+                    }
+                });
+                return str;
+            }
+
+            // D3 Arc Tween Block. Credit to Mike Bostock.
+            // http://bl.ocks.org/mbostock/5100636
+            function arcTween(newAngle, arc) {
+                return function (d) {
+
+                    var interpolate = d3.interpolate(d.endAngle, newAngle);
+
+                    return function (t) {
+
+                        d.endAngle = interpolate(t);
+                        return arc(d);
+                    };
+                };
+            }
+
+            function loadAlbumInfo(x) {
+                if (currAlbumCircle != null && currAlbumId != null &&
+                    !clickList.includes(currAlbumCircle.attr("genre"))) {
+
+                    // REMOVE FOCUS FROM CURRENT ALBUM
+                    currAlbumCircle.style("opacity", 0.3);
+                    currAlbumCircle.attr("stroke", "none");
+                    currAlbumCircle.attr("stroke-width", "none");
+                    currAlbumCircle.attr("r", 10);
+                    d3.select("#num" + currAlbumId).remove();
+                } else if (currAlbumCircle != null && currAlbumId != null &&
+                    clickList.includes(currAlbumCircle.attr("genre"))) {
+                      currAlbumCircle.attr("stroke", "none");
+                      currAlbumCircle.attr("r", 10);
+                      d3.select("#num" + currAlbumId).remove();
+                }
+                if (currAlbumCircle != null && currAlbumId != null) {
+                    albumTitleText.remove();
+                    albumArtistText.remove();
+                    pitchforkText.remove();
+                    albumInfoSvg.selectAll("path").remove();
+                    pitchforkScoreText.remove();
+                    spotifyText.remove();
+                    spotifyPopularityText.remove();
+                    genresText.remove();
+                    numTracksText.remove();
+                    releaseDateText.remove();
+                    labelText.remove();
+                }
+
+                var marginTop = 75;
+
+                // IF USER UNCLICKS CIRCLE
+                if (currAlbumCircle != null && currAlbumCircle.attr("title") === popularityData[x]['title'] &&
+                    currAlbumCircle.attr("artist") === popularityData[x]['artist']) {
+                    currAlbumCircle = null;
+                    currAlbumId = null;
+
+                    svg.selectAll("circle").each(function () {
+                        let circle = d3.select(this);
+                        if (circle.attr("title") === popularityData[x]['title'] &&
+                            circle.attr("artist") === popularityData[x]['artist']) {
+                            circle.style("opacity", 0.3);
+                            circle.attr("stroke", "none");
+                            circle.attr("stroke-width", 1);
+                            circle.attr("r", 10);
+                        }
+                    });
+                } else {
+                    albumTitleText =
+                        albumInfoSvg.append("text")
+                        .text(popularityData[x]['title'])
+                        .attr("x", 300)
+                        .attr("y", marginTop + 20)
+                        .attr("text-anchor", "middle")
+                        .attr("font-weight", "bold")
+                        .attr("fill", "black")
+                        .attr("font-size", "20px");
+
+                    albumArtistText =
+                        albumInfoSvg.append("text")
+                        .text(popularityData[x]['artist'])
+                        .attr("x", 300)
+                        .attr("y", marginTop + 60)
+                        .attr("text-anchor", "middle")
+                        .attr("fill", "black")
+                        .attr("font-size", "18px");
+
+                    genresText =
+                        albumInfoSvg.append("text")
+                        .text("Genres: " + concatenateStringArr(popularityData[x]['genres']))
+                        .attr("x", 300)
+                        .attr("y", marginTop + 100)
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "12px")
+                        .attr("dy", 0)
+                        .call(wrap, 500);
+
+                    numTracksText =
+                        albumInfoSvg.append("text")
+                        .text(popularityData[x]['numTracks'] + " tracks")
+                        .attr("x", 300)
+                        .attr("y", marginTop + 155)
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "14px");
+
+                    pitchforkText =
+                        albumInfoSvg.append("text")
+                        .text("Pitchfork:")
+                        .attr("x", 250)
+                        .attr("y", marginTop + 180)
+                        .attr("text-anchor", "middle")
+                        .attr("fill", "black")
+                        .attr("font-size", "16px");
+
+                    pitchforkRatingArc = d3.arc()
+                        .innerRadius(40)
+                        .outerRadius(45)
+                        .startAngle(0);
+
+                    background1 = albumInfoSvg.append("path")
+                        .datum({
+                            endAngle: 2 * Math.PI
+                        })
+                        .style("fill", "#ddd")
+                        .attr("transform", "translate(250," + (marginTop + 240) + ")")
+                        .attr("d", pitchforkRatingArc);
+
+                    foreground1 = albumInfoSvg.append("path")
+                        .datum({
+                            endAngle: 0
+                        })
+                        .style("fill", "black")
+                        .attr("transform", "translate(250," + (marginTop + 240) + ")")
+                        .attr("d", pitchforkRatingArc);
+
+                    foreground1.transition()
+                        .duration(500)
+                        .attrTween("d", arcTween((pitchforkData[x]['score'] / 10) * 2 * Math.PI, pitchforkRatingArc));
+
+                    pitchforkScoreText =
+                        albumInfoSvg.append("text")
+                        .text(pitchforkData[x]['score'])
+                        .attr("x", 250)
+                        .attr("y", marginTop + 250)
+                        .attr("text-anchor", "middle")
+                        .attr("font-weight", "bold")
+                        .attr("fill", "black")
+                        .attr("font-size", "30px");
+
+                    spotifyText =
+                        albumInfoSvg.append("text")
+                        .text("Spotify:")
+                        .attr("x", 375)
+                        .attr("y", marginTop + 180)
+                        .attr("text-anchor", "middle")
+                        .attr("fill", "black")
+                        .attr("font-size", "16px");
+
+                    spotifyRatingArc = d3.arc()
+                        .innerRadius(40)
+                        .outerRadius(45)
+                        .startAngle(0);
+
+                    background2 = albumInfoSvg.append("path")
+                        .datum({
+                            endAngle: 2 * Math.PI
+                        })
+                        .style("fill", "#ddd")
+                        .attr("transform", "translate(375," + (marginTop + 240) + ")")
+                        .attr("d", spotifyRatingArc);
+
+                    foreground2 = albumInfoSvg.append("path")
+                        .datum({
+                            endAngle: 0
+                        })
+                        .style("fill", "#1DB954")
+                        .attr("transform", "translate(375," + (marginTop + 240) + ")")
+                        .attr("d", spotifyRatingArc);
+
+                    foreground2.transition()
+                        .duration(500)
+                        .attrTween("d", arcTween((popularityData[x]['pop'] / 100) * 2 * Math.PI, spotifyRatingArc));
+
+                    spotifyPopularityText =
+                        albumInfoSvg.append("text")
+                        .text(popularityData[x]['pop'])
+                        .attr("x", 375)
+                        .attr("y", marginTop + 250)
+                        .attr("text-anchor", "middle")
+                        .attr("font-weight", "bold")
+                        .attr("fill", "black")
+                        .attr("font-size", "30px");
+
+                    releaseDateText =
+                        albumInfoSvg.append("text")
+                        .text("Release Date: " + popularityData[x]['release_date'])
+                        .attr("x", 300)
+                        .attr("y", marginTop + 320)
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "14px");
+
+                    labelText =
+                        albumInfoSvg.append("text")
+                        .text("Label: " + popularityData[x]['label'])
+                        .attr("x", 300)
+                        .attr("y", marginTop + 340)
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "14px");
+
+                    svg.selectAll("circle").each(function () {
+                        let circle = d3.select(this);
+                        if (circle.attr("title") === popularityData[x]['title'] &&
+                            circle.attr("artist") === popularityData[x]['artist']) {
+                            circle.style("opacity", 1);
+                            circle.attr("stroke", "black");
+                            circle.attr("stroke-width", 1);
+                            circle.attr("r", 20);
+                            currAlbumCircle = circle;
+                            currAlbumId = x;
+                        }
+                    });
+                }
+            }
+
+            // Credit to Mike Bostock.
+            // https://bl.ocks.org/mbostock/7555321
+
+            function wrap(text, width) {
+                text.each(function () {
+                    let lnum = 0
+                    let lheight = 1
+                    let word
+                    let lines = []
+                    let text = d3.select(this),
+                        words = text.text().split(/\s+/).reverse(),
+                        y = text.attr("y"),
+                        dy = parseFloat(text.attr("dy")),
+                        tspan = text.text(null).append("tspan").attr("x", 300).attr("y", y).attr("dy", dy + "em")
+                    while (word = words.pop()) {
+                        lines.push(word)
+                        tspan.text(lines.join(" "))
+                        if (tspan.node().getComputedTextLength() > width) {
+                            lines.pop()
+                            tspan.text(lines.join(" "))
+                            lines = [word]
+                            tspan = text.append("tspan").attr("x", 300).attr("y", y).attr("dy", `${++lnum * lheight + dy}em`).text(word)
+                        }
+                    }
+                })
+            }
+
+            var autocomplete = document.getElementById('albums');
+
+            $('#searchForm').on('submit', search);
+
+            // SUBMIT BUTTON PRESSED
+            function search(e) {
+                if (albumLst.includes(autocomplete.value)) {
+                    var i = albumLst.indexOf(autocomplete.value);
+                    loadAlbumInfo(i);
+                    e.preventDefault();
+                }
+            }
+
+            // ENTER Key Pressed
+            autocomplete.addEventListener('keypress', function (event) {
+                if (event.keyCode == 13 && albumLst.includes(autocomplete.value)) {
+                    event.preventDefault();
+                    var i = albumLst.indexOf(autocomplete.value);
+                    loadAlbumInfo(i);
+                }
+            });
+
+        };
+        requestAlbumData();
+
+        </script>
+
+    </body>
+
+</html>

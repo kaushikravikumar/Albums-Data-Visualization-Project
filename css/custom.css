@@ -1,0 +1,19 @@
+body{
+    margin-left: 20px;
+    margin-bottom: 20px;
+}
+
+.genrelegend span {
+    margin-left: 15px;
+  }
+
+.mouse:hover {
+  cursor: pointer;
+}
+
+#albums {
+  border: 1px solid transparent;
+  padding: 5px;
+  background-color: #f1f1f1;
+  font-size: 16px;
+}
